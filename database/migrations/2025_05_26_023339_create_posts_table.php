@@ -22,6 +22,7 @@ return new class extends Migration
             $table->boolean('is_draft')->default(true);
             $table->dateTime('published_at')->nullable();
             $table->datetimes();
+            $table->softDeletes();
         });
     }
 

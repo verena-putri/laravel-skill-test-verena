@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Post;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class PostController extends Controller
 {
-    public function index()
+    // TIDAK ADA constructor dengan middleware
+
+    // ========== REQUIREMENT 4-1: posts.index ==========
+    public function index(): JsonResponse
     {
-        $posts = Post::active()
-            ->with('user:id,name,email')
-            ->orderBy('published_at', 'desc')
+        $posts = Post::whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->with('user:id,name')
+            ->latest('published_at')
             ->paginate(20);
 
         return response()->json([
@@ -32,17 +37,28 @@ class PostController extends Controller
         ]);
     }
 
-    public function create()
+    // ========== REQUIREMENT 4-2: posts.create ==========
+    public function create(): string
     {
+        // Requirement: Only authenticated users can access this route
+        if (! Auth::check()) {
+            abort(403, 'Unauthorized');
+        }
+
         return 'posts.create';
     }
 
-    public function store(Request $request)
+    // ========== REQUIREMENT 4-3: posts.store ==========
+    public function store(Request $request): JsonResponse
     {
+        // Requirement: Only authenticated users can create new posts
+        if (! Auth::check()) {
+            abort(403, 'Unauthorized');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
-            'is_draft' => 'boolean',
             'published_at' => 'nullable|date',
         ]);
 
@@ -50,51 +66,62 @@ class PostController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $post,
+            'data' => $post->load('user:id,name'),
             'message' => 'Post created successfully.',
         ], 201);
     }
 
-    public function show(string $id)
+    // ========== REQUIREMENT 4-4: posts.show ==========
+    public function show(string $id): JsonResponse
     {
-        $post = Post::active()->with('user:id,name,email')->find($id);
+        $post = Post::with('user:id,name')->find($id);
 
         if (! $post) {
             return response()->json([
                 'success' => false,
-                'message' => 'Post not found or not yet published.',
+                'message' => 'Post not found.',
             ], 404);
         }
 
+        $isPublished = $post->published_at && $post->published_at <= now();
+        $isAuthor = Auth::check() && Auth::id() === $post->user_id;
+
+        if ($isPublished || $isAuthor) {
+            return response()->json([
+                'success' => true,
+                'data' => $post,
+                'message' => 'Post retrieved successfully.',
+            ]);
+        }
+
         return response()->json([
-            'success' => true,
-            'data' => $post,
-            'message' => 'Post retrieved successfully.',
-        ]);
+            'success' => false,
+            'message' => 'Post not found.',
+        ], 404);
     }
 
-    public function edit(Post $post)
+    // ========== REQUIREMENT 4-5: posts.edit ==========
+    public function edit(Post $post): string
     {
+        // Requirement: Only the post author can access this route
         if (Auth::id() !== $post->user_id) {
-            abort(403, 'Unauthorized action.');
+            abort(403, 'Unauthorized');
         }
 
         return 'posts.edit';
     }
 
-    public function update(Request $request, Post $post)
+    // ========== REQUIREMENT 4-6: posts.update ==========
+    public function update(Request $request, Post $post): JsonResponse
     {
+        // Requirement: Only the post author can update the post
         if (Auth::id() !== $post->user_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized action.',
-            ], 403);
+            abort(403, 'Unauthorized');
         }
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'content' => 'sometimes|required|string',
-            'is_draft' => 'sometimes|boolean',
             'published_at' => 'sometimes|nullable|date',
         ]);
 
@@ -102,18 +129,17 @@ class PostController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $post,
+            'data' => $post->fresh()->load('user:id,name'),
             'message' => 'Post updated successfully.',
         ]);
     }
 
-    public function destroy(Post $post)
+    // ========== REQUIREMENT 4-7: posts.destroy ==========
+    public function destroy(Post $post): JsonResponse
     {
+        // Requirement: Only the post author can delete the post
         if (Auth::id() !== $post->user_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized action.',
-            ], 403);
+            abort(403, 'Unauthorized');
         }
 
         $post->delete();

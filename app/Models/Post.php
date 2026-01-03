@@ -5,58 +5,63 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Post extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'user_id',
         'title',
         'content',
-        'is_draft',
         'published_at',
+        'user_id',
     ];
 
     protected $casts = [
-        'is_draft' => 'boolean',
         'published_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function scopeActive(Builder $query): void
+    public function scopePublished(Builder $query): void
     {
-        $query->where('is_draft', false)
+        $query->whereNotNull('published_at')
             ->where('published_at', '<=', now());
     }
 
     public function scopeScheduled(Builder $query): void
     {
-        $query->where('is_draft', false)
-            ->where('published_at', '>', now());
+        $query->where('published_at', '>', now());
     }
 
     public function scopeDraft(Builder $query): void
     {
-        $query->where('is_draft', true);
+        $query->whereNull('published_at');
     }
 
-    public function isActive(): bool
+    public function isPublished(): bool
     {
-        return ! $this->is_draft && $this->published_at && $this->published_at <= now();
+        return $this->published_at && $this->published_at->lte(now());
     }
 
     public function isScheduled(): bool
     {
-        return ! $this->is_draft && $this->published_at && $this->published_at > now();
+        return $this->published_at && $this->published_at->gt(now());
     }
 
     public function isDraft(): bool
     {
-        return $this->is_draft;
+        return is_null($this->published_at);
+    }
+
+    public function scopeActive(Builder $query): void
+    {
+        $query->published();
     }
 }

@@ -14,10 +14,20 @@ class UpdatePostRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => 'sometimes|required|string|max:255',
-            'content' => 'sometimes|required|string',
-            'is_draft' => 'sometimes|boolean',
-            'published_at' => 'sometimes|nullable|date',
+            'title' => ['sometimes', 'required', 'string', 'max:255'],
+            'content' => ['sometimes', 'required', 'string'],
+            'published_at' => ['sometimes', 'nullable', 'date'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('is_draft') && $this->boolean('is_draft')) {
+            $this->merge(['published_at' => null]);
+        }
+
+        if ($this->filled('published_at')) {
+            $this->merge(['published_at' => $this->date('published_at')]);
+        }
     }
 }
